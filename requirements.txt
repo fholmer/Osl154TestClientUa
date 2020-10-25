@@ -1,0 +1,4 @@
+cryptography==3.1.1
+opcua==0.98.12
+Pillow==8.0.1
+pytest
