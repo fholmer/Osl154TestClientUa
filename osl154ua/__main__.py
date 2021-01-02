@@ -10,14 +10,22 @@ class register():
         return w
 
 @register.subparser
-def setup_create(subparsers):
-    parser = subparsers.add_parser("create", help="Create new sign")
-    parser.add_argument("name", type=str, default="SIGN", help="A short name for this sign")
+def setup_add_sign(subparsers):
+    parser = subparsers.add_parser("add-sign", help="Add a new sign")
+    parser.add_argument("name", type=str, default="default", help="A short name for this sign")
     parser.add_argument("-server", required=True, type=str, help="opcua-server uri")
     parser.add_argument("-tag", required=True, type=str, help="nodeid prefix")
     parser.add_argument("-width", required=True, type=int, default=64, help="pixel width")
     parser.add_argument("-height", required=True, type=int, default=64, help="pixel height")
-    parser.set_defaults(func=signdata.create_sign_data)
+    parser.set_defaults(func=signdata.add_sign_data)
+
+@register.subparser
+def setup_discover_sign(subparsers):
+    parser = subparsers.add_parser("discover-sign", help="Search for sign in server")
+    parser.add_argument("server", type=str, help="opcua-server uri")
+    parser.add_argument("-add-tag", type=str, default="", help="add sign with matching prefix")
+    parser.add_argument("-name", type=str, default="default", help="A short name for this sign")
+    parser.set_defaults(func=opcdata.discover_sign_data)
 
 @register.subparser
 def setup_list_signs(subparsers):
@@ -27,14 +35,14 @@ def setup_list_signs(subparsers):
 @register.subparser
 def setup_rgb_on(subparsers):
     parser = subparsers.add_parser("rgb-on", help="Write 1.bmp to opc-server")
-    parser.add_argument("name", type=str, default="SIGN", help="A short name for this sign")
+    parser.add_argument("-name", type=str, default="default", help="A short name for this sign")
     parser.add_argument("-image", type=str, default="1.bmp", help="name of bmp image")
     parser.set_defaults(func=opcdata.rgb_on)
 
 @register.subparser
 def setup_read(subparsers):
     parser = subparsers.add_parser("read", help="read sign tags from opc-server")
-    parser.add_argument("name", type=str, default="SIGN", help="A short name for this sign")
+    parser.add_argument("-name", type=str, default="default", help="A short name for this sign")
     parser.set_defaults(func=opcdata.sign_read)
 
 def main():

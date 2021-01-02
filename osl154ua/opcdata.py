@@ -3,14 +3,83 @@ import pathlib
 import json
 import time
 from PIL import Image
+from . import utils
 
 def raw_to_img(width, height, rawbytes):
     im = Image.frombytes("RGB",(width, height),rawbytes)
     im = Image.frombytes("RGB",(width, height),im.convert("BGR;24").tobytes())
     return im
 
+def make_tag_dict(nodeids):
+    return {nodeid.upper().rsplit(".", 1)[-1]: nodeid for nodeid in nodeids}
+
+def _safe_bool(boolstr):
+    _bool = boolstr.lower()
+    if _bool in ("1", "on", "t", "true", "yes", "y") or _bool.startswith("true"):
+        return True
+    return False
+
+def discover_sign_data(server, add_tag, name):
+    interactive = True
+    client = opcua.Client(server)
+
+    def browse_recursive(node):
+        for childId in node.get_children():
+            ch = client.get_node(childId)
+            if ch.get_node_class() == opcua.ua.NodeClass.Object:
+                yield from browse_recursive(ch)
+            elif ch.get_node_class() == opcua.ua.NodeClass.Variable:
+                try:
+                    yield ch.nodeid.to_string()
+                except opcua.ua.uaerrors._auto.BadWaitingForInitialData:
+                    pass
+
+    try:
+        client.connect()
+        root = client.get_root_node()
+        nodeid_list = list(nodeid for nodeid in browse_recursive(root) if ";s=" in nodeid)
+    finally:
+        client.disconnect()
+
+    add_tags = []
+    if add_tag and name:
+        add_tags.append((add_tag, name))
+    else:
+        prefix_end = len(".image_onsign")
+        matches = [nodeid for nodeid in nodeid_list if nodeid.lower().endswith(".image_onsign")]
+        if not matches:
+            print("No sign detected. Expected tag structure: ns=*;s=*.*.*.IMAGE_ONSIGN")
+            return
+        for match in matches:
+            tag = match[:-prefix_end]
+            print(f"Found sign prefix: {tag}")
+            if interactive:
+                if _safe_bool(input(f"Add {tag}? (y/[n]): ")):
+                    short_name = input(f"Use short name: [{name}]: ")
+                    if not short_name:
+                        short_name = name
+                    add_tags.append((tag, short_name))
+            else:
+                print(f"Add using arguments: discover-sign {server} -add-tag {tag} -name default")
+                print("")
+    if not add_tags:
+        return
+    try:
+        client.connect()
+        for tag, name in add_tags:
+            matches = [nodeid for nodeid in nodeid_list if nodeid.startswith(tag)]
+            tags = make_tag_dict(matches)
+            pixelwidth = client.get_node(tags["PIXELWIDTH"])
+            pixelheight = client.get_node(tags["PIXELHEIGHT"])
+            width = pixelwidth.get_value()
+            height = pixelheight.get_value()
+            utils.create_sign_data(name, server, tag, width, height, tags)
+            print(f"Added {tag} as {name}.")
+    finally:
+        client.disconnect()
+
 def sign_read(name):
-    root = pathlib.Path(".", "signs", name)
+    root = utils.get_sign_path(name)
     data = json.load(root.joinpath("sign.json").open("r"))
 
     server = data["server"]
